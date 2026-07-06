@@ -1,13 +1,198 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Company {
+  id                 String    @id @default(cuid())
+  name               String
+  licenseNumber      String?
+  activity           String?
+  address            String?
+  phone              String?
+  email              String?
+  trnNumber          String?
+  vatRegistered      Boolean   @default(false)
+  vatPeriodType      String    @default("QUARTERLY")
+  financialYearStart DateTime?
+  financialYearEnd   DateTime?
+  logoUrl            String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Account {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  name          String
+  type          String
+  parentId      String?
+  parent        Account?      @relation("AccountParent", fields: [parentId], references: [id])
+  children      Account[]     @relation("AccountParent")
+  isPosting     Boolean       @default(true)
+  isActive      Boolean       @default(true)
+  openingDebit  Decimal       @default(0)
+  openingCredit Decimal       @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  voucherLines  VoucherLine[]
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  customerType   String   @default("COMPANY")
+  name           String
+  licenseNumber  String?
+  mobile         String?
+  email          String?
+  trnNumber      String?
+  vatRegistered  Boolean  @default(false)
+  paymentTerms   String?
+  openingBalance Decimal  @default(0)
+  address        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  maintenanceJobs MaintenanceJob[]
+  vouchers        Voucher[]
+  quotations      Quotation[]
+}
+
+model Supplier {
+  id             String   @id @default(cuid())
+  name           String
+  supplierType   String?
+  licenseNumber  String?
+  mobile         String?
+  email          String?
+  trnNumber      String?
+  vatRegistered  Boolean  @default(false)
+  paymentTerms   String?
+  openingBalance Decimal  @default(0)
+  address        String?
+  contactPerson  String?
+  bankDetails    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  vouchers Voucher[]
+}
+
+model ItemService {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  type             String   @default("SERVICE")
+  category         String?
+  unit             String?
+  costPrice        Decimal  @default(0)
+  sellingPrice     Decimal  @default(0)
+  vatCode          String   @default("STD5")
+  incomeAccountId  String?
+  expenseAccountId String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model MaintenanceJob {
+  id             String    @id @default(cuid())
+  jobNo          String    @unique
+  customerId     String
+  customer       Customer  @relation(fields: [customerId], references: [id])
+  siteLocation   String?
+  complaint      String
+  priority       String    @default("NORMAL")
+  status         String    @default("NEW")
+  technicianName String?
+  inspectionDate DateTime?
+  completionDate DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Voucher {
+  id          String    @id @default(cuid())
+  voucherNo   String    @unique
+  voucherType String
+  voucherDate DateTime
+  partyType   String?
+  customerId  String?
+  supplierId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  narration   String?
+  totalDebit  Decimal   @default(0)
+  totalCredit Decimal   @default(0)
+  status      String    @default("POSTED")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lines VoucherLine[]
+}
+
+model VoucherLine {
+  id          String   @id @default(cuid())
+  voucherId   String
+  voucher     Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  description String?
+  debit       Decimal  @default(0)
+  credit      Decimal  @default(0)
+  vatCode     String?
+  vatAmount   Decimal  @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model Quotation {
+  id            String   @id @default(cuid())
+  quotationNo   String   @unique
+  quotationDate DateTime
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  jobId         String?
+  subtotal      Decimal  @default(0)
+  vatAmount     Decimal  @default(0)
+  totalAmount   Decimal  @default(0)
+  status        String   @default("DRAFT")
+  notes         String?
+  terms         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines QuotationLine[]
+}
+
+model QuotationLine {
+  id            String    @id @default(cuid())
+  quotationId   String
+  quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  itemServiceId String?
+  description   String
+  quantity      Decimal   @default(1)
+  rate          Decimal   @default(0)
+  vatCode       String    @default("STD5")
+  vatAmount     Decimal   @default(0)
+  lineTotal     Decimal   @default(0)
+}
+
+model VatPeriod {
+  id            String   @id @default(cuid())
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  dueDate       DateTime
+  status        String   @default("OPEN")
+  outputVat     Decimal  @default(0)
+  inputVat      Decimal  @default(0)
+  netVatPayable Decimal  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
