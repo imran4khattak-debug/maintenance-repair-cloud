@@ -30,8 +30,13 @@ function cleanDate(value: FormDataEntryValue | null) {
   return date;
 }
 
-function formatMoney(value: unknown) {
+function money(value: unknown) {
   return Number(value || 0).toFixed(2);
+}
+
+function vatRateFromCode(vatCode: string) {
+  if (vatCode === "STD5") return 0.05;
+  return 0;
 }
 
 async function createSupplierBill(formData: FormData) {
@@ -57,32 +62,31 @@ async function createSupplierBill(formData: FormData) {
   }
 
   const inputVatAccount = await prisma.account.findUnique({
-    where: {
-      code: "1160",
-    },
+    where: { code: "1160" },
   });
 
   const supplierPayableAccount = await prisma.account.findUnique({
-    where: {
-      code: "2110",
-    },
+    where: { code: "2110" },
   });
 
   if (!inputVatAccount) {
-    throw new Error("Input VAT account 1160 is missing. Seed Chart of Accounts first.");
+    throw new Error(
+      "Input VAT account 1160 is missing. Go to Chart of Accounts and click Seed Default COA."
+    );
   }
 
   if (!supplierPayableAccount) {
-    throw new Error("Accounts Payable account 2110 is missing. Seed Chart of Accounts first.");
+    throw new Error(
+      "Accounts Payable account 2110 is missing. Go to Chart of Accounts and click Seed Default COA."
+    );
   }
 
-  const vatAmount = vatCode === "STD5" ? amountBeforeVat * 0.05 : 0;
-  const totalAmount = amountBeforeVat + vatAmount;
+  const vatRate = vatRateFromCode(vatCode);
+  const vatAmount = Number((amountBeforeVat * vatRate).toFixed(2));
+  const totalAmount = Number((amountBeforeVat + vatAmount).toFixed(2));
 
   const count = await prisma.voucher.count({
-    where: {
-      voucherType: "SUPPLIER_BILL",
-    },
+    where: { voucherType: "SUPPLIER_BILL" },
   });
 
   const voucherNo = `PB-${String(count + 1).padStart(5, "0")}`;
@@ -122,7 +126,7 @@ async function createSupplierBill(formData: FormData) {
             : []),
           {
             accountId: supplierPayableAccount.id,
-            description: "Supplier payable",
+            description: "Accounts payable - supplier",
             debit: 0,
             credit: totalAmount,
             vatCode,
@@ -140,12 +144,8 @@ export default async function PurchasesPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const suppliers = await prisma.supplier.findMany({
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      name: "asc",
-    },
+    where: { isActive: true },
+    orderBy: { name: "asc" },
   });
 
   const expenseAccounts = await prisma.account.findMany({
@@ -154,23 +154,28 @@ export default async function PurchasesPage() {
       isPosting: true,
       isActive: true,
     },
-    orderBy: {
-      code: "asc",
-    },
+    orderBy: { code: "asc" },
+  });
+
+  const inputVatAccount = await prisma.account.findUnique({
+    where: { code: "1160" },
+  });
+
+  const supplierPayableAccount = await prisma.account.findUnique({
+    where: { code: "2110" },
   });
 
   const bills = await prisma.voucher.findMany({
-    where: {
-      voucherType: "SUPPLIER_BILL",
-    },
-    orderBy: {
-      voucherDate: "desc",
-    },
+    where: { voucherType: "SUPPLIER_BILL" },
+    orderBy: { voucherDate: "desc" },
     include: {
       supplier: true,
       lines: {
         include: {
           account: true,
+        },
+        orderBy: {
+          createdAt: "asc",
         },
       },
     },
@@ -182,22 +187,29 @@ export default async function PurchasesPage() {
   );
 
   const totalInputVat = bills.reduce((sum, bill) => {
-    const vatLines = bill.lines.filter((line) => line.account.code === "1160");
+    const inputVatLines = bill.lines.filter(
+      (line) => line.account.code === "1160"
+    );
+
     return (
-      sum + vatLines.reduce((lineSum, line) => lineSum + Number(line.debit), 0)
+      sum +
+      inputVatLines.reduce((lineSum, line) => lineSum + Number(line.debit), 0)
     );
   }, 0);
 
-  const unpaidSupplierPayable = bills.reduce(
-    (sum, bill) => sum + Number(bill.totalCredit),
-    0
-  );
+  const totalNetPurchase = totalBills - totalInputVat;
+
+  const setupReady =
+    suppliers.length > 0 &&
+    expenseAccounts.length > 0 &&
+    inputVatAccount &&
+    supplierPayableAccount;
 
   return (
     <>
       <PageHeader
         title="Purchases / Supplier Bills"
-        subtitle="Post supplier bills with input VAT and automatic accounts payable entry."
+        subtitle="Post supplier bills with expense, input VAT and accounts payable entries."
       />
 
       <div className="space-y-6 p-8">
@@ -210,33 +222,60 @@ export default async function PurchasesPage() {
           </Card>
 
           <Card>
-            <p className="text-sm text-slate-500">Purchase Total</p>
+            <p className="text-sm text-slate-500">Net Purchase</p>
             <p className="mt-3 text-3xl font-bold text-slate-950">
-              {totalBills.toFixed(2)}
+              {money(totalNetPurchase)}
             </p>
           </Card>
 
           <Card>
             <p className="text-sm text-slate-500">Input VAT</p>
             <p className="mt-3 text-3xl font-bold text-slate-950">
-              {totalInputVat.toFixed(2)}
+              {money(totalInputVat)}
             </p>
           </Card>
 
           <Card>
             <p className="text-sm text-slate-500">Supplier Payable</p>
             <p className="mt-3 text-3xl font-bold text-slate-950">
-              {unpaidSupplierPayable.toFixed(2)}
+              {money(totalBills)}
             </p>
           </Card>
         </div>
+
+        {!setupReady ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <h2 className="text-lg font-semibold text-amber-900">
+              Required setup before supplier bill
+            </h2>
+
+            <div className="mt-3 grid gap-2 text-sm text-amber-800 md:grid-cols-2">
+              <p>Supplier created: {suppliers.length > 0 ? "Yes" : "No"}</p>
+              <p>
+                Expense account available:{" "}
+                {expenseAccounts.length > 0 ? "Yes" : "No"}
+              </p>
+              <p>
+                Input VAT account 1160 exists:{" "}
+                {inputVatAccount ? "Yes" : "No"}
+              </p>
+              <p>
+                Supplier payable account 2110 exists:{" "}
+                {supplierPayableAccount ? "Yes" : "No"}
+              </p>
+            </div>
+          </Card>
+        ) : null}
 
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">
             Create Supplier Bill
           </h2>
 
-          <form action={createSupplierBill} className="mt-5 grid gap-5 md:grid-cols-5">
+          <form
+            action={createSupplierBill}
+            className="mt-5 grid gap-5 md:grid-cols-5"
+          >
             <div>
               <Label>Date</Label>
               <Input name="voucherDate" type="date" defaultValue={today} />
@@ -272,6 +311,7 @@ export default async function PurchasesPage() {
                 name="amountBeforeVat"
                 type="number"
                 step="0.01"
+                min="0"
                 defaultValue="0"
               />
             </div>
@@ -287,10 +327,10 @@ export default async function PurchasesPage() {
             </div>
 
             <div className="md:col-span-4">
-              <Label>Description</Label>
+              <Label>Description / Supplier Invoice Ref</Label>
               <Input
                 name="narration"
-                placeholder="Bill description, invoice number or job reference"
+                placeholder="Example: Supplier invoice no, job ref, material purchase"
               />
             </div>
 
@@ -298,18 +338,6 @@ export default async function PurchasesPage() {
               <Button type="submit">Create Supplier Bill</Button>
             </div>
           </form>
-
-          {suppliers.length === 0 ? (
-            <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              No active suppliers found. Add supplier first from Suppliers page.
-            </p>
-          ) : null}
-
-          {expenseAccounts.length === 0 ? (
-            <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              No expense accounts found. Go to Chart of Accounts and seed default COA first.
-            </p>
-          ) : null}
         </Card>
 
         <Card>
@@ -317,8 +345,8 @@ export default async function PurchasesPage() {
             Supplier Bills List
           </h2>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="mt-5 overflow-x-auto rounded-lg">
+            <table className="min-w-[1100px] w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
                   <th className="py-2">Bill No</th>
@@ -327,18 +355,18 @@ export default async function PurchasesPage() {
                   <th className="py-2">Narration</th>
                   <th className="py-2 text-right">Net</th>
                   <th className="py-2 text-right">Input VAT</th>
-                  <th className="py-2 text-right">Total</th>
-                  <th className="py-2">Status</th>
+                  <th className="py-2 pr-6 text-right whitespace-nowrap">Total</th>
+                  <th className="py-2 pl-6 whitespace-nowrap">Status</th>                  
                 </tr>
               </thead>
 
               <tbody>
                 {bills.map((bill) => {
-                  const vatLineTotal = bill.lines
+                  const inputVat = bill.lines
                     .filter((line) => line.account.code === "1160")
                     .reduce((sum, line) => sum + Number(line.debit), 0);
 
-                  const netAmount = Number(bill.totalCredit) - vatLineTotal;
+                  const net = Number(bill.totalCredit) - inputVat;
 
                   return (
                     <tr key={bill.id} className="border-b last:border-0">
@@ -346,18 +374,14 @@ export default async function PurchasesPage() {
                       <td className="py-3">
                         {bill.voucherDate.toISOString().slice(0, 10)}
                       </td>
-                      <td className="py-3 font-medium">
+                      <td className="py-3 font-medium text-slate-900">
                         {bill.supplier?.name || "-"}
                       </td>
                       <td className="py-3">{bill.narration || "-"}</td>
-                      <td className="py-3 text-right">
-                        {formatMoney(netAmount)}
-                      </td>
-                      <td className="py-3 text-right">
-                        {formatMoney(vatLineTotal)}
-                      </td>
+                      <td className="py-3 text-right">{money(net)}</td>
+                      <td className="py-3 text-right">{money(inputVat)}</td>
                       <td className="py-3 text-right font-semibold">
-                        {formatMoney(bill.totalCredit)}
+                        {money(bill.totalCredit)}
                       </td>
                       <td className="py-3">
                         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -371,10 +395,53 @@ export default async function PurchasesPage() {
                 {bills.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-slate-500">
-                      No supplier bills found. Create your first bill above.
+                      No supplier bills found. Create your first supplier bill
+                      above.
                     </td>
                   </tr>
                 ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Accounting Entry Logic
+          </h2>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-slate-500">
+                  <th className="py-2">Account</th>
+                  <th className="py-2">Debit</th>
+                  <th className="py-2">Credit</th>
+                  <th className="py-2">Purpose</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr className="border-b">
+                  <td className="py-3">Selected Expense Account</td>
+                  <td className="py-3">Amount before VAT</td>
+                  <td className="py-3">-</td>
+                  <td className="py-3">Material, subcontractor or expense cost</td>
+                </tr>
+
+                <tr className="border-b">
+                  <td className="py-3">1160 - Input VAT Recoverable</td>
+                  <td className="py-3">VAT amount</td>
+                  <td className="py-3">-</td>
+                  <td className="py-3">VAT recoverable from FTA</td>
+                </tr>
+
+                <tr>
+                  <td className="py-3">2110 - Accounts Payable - Suppliers</td>
+                  <td className="py-3">-</td>
+                  <td className="py-3">Total bill amount</td>
+                  <td className="py-3">Amount payable to supplier</td>
+                </tr>
               </tbody>
             </table>
           </div>
