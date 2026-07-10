@@ -1,4 +1,4 @@
-﻿import { revalidatePath } from "next/cache";
+import { revalidatePath } from "next/cache";
 import PageHeader from "@/components/PageHeader";
 import { Button, Card, Input, Label, Select } from "@/components/Card";
 import { prisma } from "@/lib/prisma";
@@ -35,7 +35,10 @@ function money(value: unknown) {
 }
 
 function vatRateFromCode(vatCode: string) {
-  if (vatCode === "STD5") return 0.05;
+  if (vatCode === "STD5") {
+    return 0.05;
+  }
+
   return 0;
 }
 
@@ -62,11 +65,15 @@ async function createSupplierBill(formData: FormData) {
   }
 
   const inputVatAccount = await prisma.account.findUnique({
-    where: { code: "1160" },
+    where: {
+      code: "1160",
+    },
   });
 
   const supplierPayableAccount = await prisma.account.findUnique({
-    where: { code: "2110" },
+    where: {
+      code: "2110",
+    },
   });
 
   if (!inputVatAccount) {
@@ -86,7 +93,9 @@ async function createSupplierBill(formData: FormData) {
   const totalAmount = Number((amountBeforeVat + vatAmount).toFixed(2));
 
   const count = await prisma.voucher.count({
-    where: { voucherType: "SUPPLIER_BILL" },
+    where: {
+      voucherType: "SUPPLIER_BILL",
+    },
   });
 
   const voucherNo = `PB-${String(count + 1).padStart(5, "0")}`;
@@ -144,8 +153,12 @@ export default async function PurchasesPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const suppliers = await prisma.supplier.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
+    where: {
+      isActive: true,
+    },
+    orderBy: {
+      name: "asc",
+    },
   });
 
   const expenseAccounts = await prisma.account.findMany({
@@ -154,20 +167,30 @@ export default async function PurchasesPage() {
       isPosting: true,
       isActive: true,
     },
-    orderBy: { code: "asc" },
+    orderBy: {
+      code: "asc",
+    },
   });
 
   const inputVatAccount = await prisma.account.findUnique({
-    where: { code: "1160" },
+    where: {
+      code: "1160",
+    },
   });
 
   const supplierPayableAccount = await prisma.account.findUnique({
-    where: { code: "2110" },
+    where: {
+      code: "2110",
+    },
   });
 
   const bills = await prisma.voucher.findMany({
-    where: { voucherType: "SUPPLIER_BILL" },
-    orderBy: { voucherDate: "desc" },
+    where: {
+      voucherType: "SUPPLIER_BILL",
+    },
+    orderBy: {
+      voucherDate: "desc",
+    },
     include: {
       supplier: true,
       lines: {
@@ -202,8 +225,8 @@ export default async function PurchasesPage() {
   const setupReady =
     suppliers.length > 0 &&
     expenseAccounts.length > 0 &&
-    inputVatAccount &&
-    supplierPayableAccount;
+    Boolean(inputVatAccount) &&
+    Boolean(supplierPayableAccount);
 
   return (
     <>
@@ -349,14 +372,18 @@ export default async function PurchasesPage() {
             <table className="min-w-[1100px] w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
-                  <th className="py-2">Bill No</th>
-                  <th className="py-2">Date</th>
-                  <th className="py-2">Supplier</th>
-                  <th className="py-2">Narration</th>
-                  <th className="py-2 text-right">Net</th>
-                  <th className="py-2 text-right">Input VAT</th>
-                  <th className="py-2 pr-6 text-right whitespace-nowrap">Total</th>
-                  <th className="py-2 pl-6 whitespace-nowrap">Status</th>                  
+                  <th className="py-2 whitespace-nowrap">Bill No</th>
+                  <th className="py-2 whitespace-nowrap">Date</th>
+                  <th className="py-2 whitespace-nowrap">Supplier</th>
+                  <th className="py-2 whitespace-nowrap">Narration</th>
+                  <th className="py-2 text-right whitespace-nowrap">Net</th>
+                  <th className="py-2 text-right whitespace-nowrap">
+                    Input VAT
+                  </th>
+                  <th className="py-2 pr-6 text-right whitespace-nowrap">
+                    Total
+                  </th>
+                  <th className="py-2 pl-6 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
 
@@ -380,10 +407,10 @@ export default async function PurchasesPage() {
                       <td className="py-3">{bill.narration || "-"}</td>
                       <td className="py-3 text-right">{money(net)}</td>
                       <td className="py-3 text-right">{money(inputVat)}</td>
-                      <td className="py-3 text-right font-semibold">
+                      <td className="py-3 pr-6 text-right font-semibold">
                         {money(bill.totalCredit)}
                       </td>
-                      <td className="py-3">
+                      <td className="py-3 pl-6">
                         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
                           {bill.status}
                         </span>
@@ -410,8 +437,8 @@ export default async function PurchasesPage() {
             Accounting Entry Logic
           </h2>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="mt-4 overflow-x-auto rounded-lg">
+            <table className="min-w-[900px] w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
                   <th className="py-2">Account</th>
@@ -426,7 +453,9 @@ export default async function PurchasesPage() {
                   <td className="py-3">Selected Expense Account</td>
                   <td className="py-3">Amount before VAT</td>
                   <td className="py-3">-</td>
-                  <td className="py-3">Material, subcontractor or expense cost</td>
+                  <td className="py-3">
+                    Material, subcontractor or expense cost
+                  </td>
                 </tr>
 
                 <tr className="border-b">
@@ -437,7 +466,9 @@ export default async function PurchasesPage() {
                 </tr>
 
                 <tr>
-                  <td className="py-3">2110 - Accounts Payable - Suppliers</td>
+                  <td className="py-3">
+                    2110 - Accounts Payable - Suppliers
+                  </td>
                   <td className="py-3">-</td>
                   <td className="py-3">Total bill amount</td>
                   <td className="py-3">Amount payable to supplier</td>
