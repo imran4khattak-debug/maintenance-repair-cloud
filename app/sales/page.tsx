@@ -1,4 +1,5 @@
-﻿import { revalidatePath } from "next/cache";
+﻿import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import PageHeader from "@/components/PageHeader";
 import { Button, Card, Input, Label, Select } from "@/components/Card";
 import { prisma } from "@/lib/prisma";
@@ -404,7 +405,7 @@ export default async function SalesPage() {
           </h2>
 
           <div className="mt-5 overflow-x-auto rounded-lg">
-            <table className="min-w-[1100px] w-full text-sm">
+            <table className="min-w-[1200px] w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
                   <th className="py-2 whitespace-nowrap">Invoice No</th>
@@ -419,6 +420,9 @@ export default async function SalesPage() {
                     Total
                   </th>
                   <th className="py-2 pl-6 whitespace-nowrap">Status</th>
+                  <th className="py-2 pl-6 text-right whitespace-nowrap">
+                    Print
+                  </th>
                 </tr>
               </thead>
 
@@ -450,13 +454,21 @@ export default async function SalesPage() {
                           {invoice.status}
                         </span>
                       </td>
+                      <td className="py-3 pl-6 text-right">
+                        <Link
+                          href={`/sales/${invoice.id}/print`}
+                          className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold hover:bg-slate-100"
+                        >
+                          Print
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
 
                 {invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-500">
+                    <td colSpan={9} className="py-8 text-center text-slate-500">
                       No sales invoices found. Create your first sales invoice
                       above.
                     </td>
