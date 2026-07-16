@@ -1,4 +1,5 @@
-﻿import { revalidatePath } from "next/cache";
+﻿import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import PageHeader from "@/components/PageHeader";
 import { Button, Card, Input, Label, Select } from "@/components/Card";
 import { prisma } from "@/lib/prisma";
@@ -384,9 +385,7 @@ export default async function VouchersPage() {
               <p>
                 Accounts payable 2110 exists: {payableAccount ? "Yes" : "No"}
               </p>
-              <p>
-                Customers / Suppliers can be added from their master pages.
-              </p>
+              <p>Customers / Suppliers can be added from their master pages.</p>
             </div>
           </Card>
         ) : null}
@@ -573,7 +572,7 @@ export default async function VouchersPage() {
           </h2>
 
           <div className="mt-5 overflow-x-auto rounded-lg">
-            <table className="min-w-[1100px] w-full text-sm">
+            <table className="min-w-[1200px] w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
                   <th className="py-2 whitespace-nowrap">Voucher No</th>
@@ -582,8 +581,13 @@ export default async function VouchersPage() {
                   <th className="py-2 whitespace-nowrap">Party</th>
                   <th className="py-2 whitespace-nowrap">Narration</th>
                   <th className="py-2 text-right whitespace-nowrap">Debit</th>
-                  <th className="py-2 text-right whitespace-nowrap">Credit</th>
+                  <th className="py-2 pr-6 text-right whitespace-nowrap">
+                    Credit
+                  </th>
                   <th className="py-2 pl-6 whitespace-nowrap">Status</th>
+                  <th className="py-2 pl-6 text-right whitespace-nowrap">
+                    Print
+                  </th>
                 </tr>
               </thead>
 
@@ -609,7 +613,7 @@ export default async function VouchersPage() {
                       <td className="py-3 text-right">
                         {money(voucher.totalDebit)}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-3 pr-6 text-right">
                         {money(voucher.totalCredit)}
                       </td>
                       <td className="py-3 pl-6">
@@ -617,13 +621,21 @@ export default async function VouchersPage() {
                           {voucher.status}
                         </span>
                       </td>
+                      <td className="py-3 pl-6 text-right">
+                        <Link
+                          href={`/vouchers/${voucher.id}/print`}
+                          className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold hover:bg-slate-100"
+                        >
+                          Print
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
 
                 {vouchers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-500">
+                    <td colSpan={9} className="py-8 text-center text-slate-500">
                       No vouchers found. Create receipt, payment or JV above.
                     </td>
                   </tr>
